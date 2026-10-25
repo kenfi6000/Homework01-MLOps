@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+build/
+dist/
+site/
+venv/
+.venv/
+env/
+.env
+.env.*
+!.env.example
+.envrc
+
+# Test and tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local ML data and generated artifacts
+data/
+mlruns/
+mlartifacts/
+artifacts/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+lightning_logs/
+
+# Local databases and logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Editors and operating systems
+.streamlit/secrets.toml
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

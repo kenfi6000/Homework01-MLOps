@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /workspace
+
+COPY pyproject.toml ./
+COPY README.md ./
+COPY src ./src
+COPY app ./app
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu "torch>=2.2.0" "torchvision>=0.17.0" && \
+    pip install --no-cache-dir -e .
+
+COPY configs ./configs
+
+ENV PYTHONPATH=/workspace/src
+
+CMD ["python", "-m", "fashion_mnist_mlop.train", "--config", "/workspace/configs/training.toml"]

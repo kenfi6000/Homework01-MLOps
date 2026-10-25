@@ -1,0 +1,114 @@
+services:
+  minio:
+    image: bitnamilegacy/minio:2025.5.24
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_storage:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.15.1
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlruns/mlflow.db
+      --artifacts-destination /mlruns/artifacts
+      --serve-artifacts
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - mlflow_data:/mlruns
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  webhook-receiver:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    command: uvicorn fashion_mnist_mlop.webhook_receiver:app --host 0.0.0.0 --port 8001
+    ports:
+      - "127.0.0.1:8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  train-model:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.train
+    environment:
+      TRAIN_CONFIG_PATH: /workspace/configs/training.toml
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MODEL_BUCKET_NAME: fashion-minst-bucket
+      WEBHOOK_URL: http://webhook-receiver:8001/webhook
+    depends_on:
+      mlflow:
+        condition: service_healthy
+      webhook-receiver:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - mlflow_data:/mlruns
+    command: ["python", "-m", "fashion_mnist_mlop.train", "--config", "/workspace/configs/training.toml"]
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MODEL_BUCKET_NAME: fashion-minst-bucket
+      MODEL_PREFIX: model/
+      API_PORT: 8000
+    depends_on:
+      minio:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+      train-model:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: uvicorn fashion_mnist_mlop.api:app --host 0.0.0.0 --port 8000
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.streamlit
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8501:8501"
+    command: streamlit run app/streamlit/app.py --server.address 0.0.0.0 --server.port 8501
+
+volumes:
+  minio_storage:
+  mlflow_data:

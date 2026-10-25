@@ -1,0 +1,28 @@
+[training]
+epochs = 5
+batch_size = 64
+learning_rate = 0.001
+optimizer = "adam"
+loss_function = "cross_entropy"
+random_seed = 42
+validation_split = 0.2
+momentum = 0.9
+weight_decay = 0.0001
+learning_rate_schedule = "none"
+early_stopping_patience = 5
+data_loader_workers = 2
+pin_memory = true
+
+[mlflow]
+tracking_uri = "http://mlflow:5000"
+experiment_name = "fashion-mnist-classifier"
+
+[minio]
+endpoint = "minio:9000"
+secure = false
+bucket_name = "fashion-minst-bucket"
+model_prefix = "model/"
+
+[webhook]
+url = "http://webhook-receiver:8001/webhook"
+enabled = true
