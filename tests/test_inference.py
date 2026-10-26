@@ -1,3 +1,5 @@
+"""Tests for loading model weights from a local path during inference."""
+
 from __future__ import annotations
 
 import pytest

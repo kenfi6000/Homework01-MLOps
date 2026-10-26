@@ -1,3 +1,5 @@
+"""Fashion-MNIST loading, image preprocessing, and classification helpers."""
+
 from __future__ import annotations
 
 import io
@@ -24,6 +26,7 @@ CLASS_NAMES = [
 
 
 def make_transforms() -> transforms.Compose:
+    """Apply the tensor conversion and normalization used during training."""
     return transforms.Compose(
         [
             transforms.ToTensor(),
@@ -33,6 +36,7 @@ def make_transforms() -> transforms.Compose:
 
 
 def build_fashion_mnist_data(config: dict) -> tuple[torch.utils.data.Dataset, torch.utils.data.Dataset]:
+    """Download Fashion-MNIST and create a seeded train/validation split."""
     dataset = datasets.FashionMNIST(
         root="./data",
         train=True,
@@ -51,6 +55,7 @@ def build_fashion_mnist_data(config: dict) -> tuple[torch.utils.data.Dataset, to
 
 
 def build_data_loaders(config: dict, train_dataset, validation_dataset) -> tuple[DataLoader, DataLoader]:
+    """Create shuffled training and deterministic validation data loaders."""
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
@@ -69,6 +74,7 @@ def build_data_loaders(config: dict, train_dataset, validation_dataset) -> tuple
 
 
 def preprocess_image_bytes(file_bytes: bytes) -> torch.Tensor:
+    """Convert uploaded image bytes into a normalized 1x1x28x28 model input."""
     image = Image.open(io.BytesIO(file_bytes)).convert("L")
     image = ImageOps.fit(image, (28, 28), method=Image.Resampling.BILINEAR, centering=(0.5, 0.5))
     array = np.asarray(image, dtype=np.float32) / 255.0
@@ -78,14 +84,17 @@ def preprocess_image_bytes(file_bytes: bytes) -> torch.Tensor:
 
 
 def preprocess_image_for_prediction(file_bytes: bytes) -> torch.Tensor:
+    """Expose the shared preprocessing path used by prediction callers."""
     return preprocess_image_bytes(file_bytes)
 
 
 def detect_class_name(prediction_index: int) -> str:
+    """Map a Fashion-MNIST class index to its display name."""
     return CLASS_NAMES[prediction_index]
 
 
 def compute_accuracy(predictions: Iterable[int], targets: Iterable[int]) -> float:
+    """Calculate accuracy for paired class predictions and targets."""
     correct = 0
     total = 0
     for prediction, target in zip(predictions, targets):

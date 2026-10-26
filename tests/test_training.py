@@ -1,3 +1,5 @@
+"""Tests for configurable training helpers and safe MLflow metadata."""
+
 from __future__ import annotations
 
 import pytest

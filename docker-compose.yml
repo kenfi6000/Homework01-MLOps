@@ -1,4 +1,5 @@
 services:
+  # Persistent object storage for versioned model checkpoints.
   minio:
     image: bitnamilegacy/minio:2025.5.24
     environment:
@@ -16,6 +17,7 @@ services:
       retries: 5
       start_period: 10s
 
+  # MLflow tracks runs and serves artifacts from the shared persistent volume.
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.15.1
     command: >
@@ -36,6 +38,7 @@ services:
       retries: 10
       start_period: 30s
 
+  # Local example receiver for the training-complete webhook.
   webhook-receiver:
     build:
       context: .
@@ -50,6 +53,7 @@ services:
       retries: 5
       start_period: 10s
 
+  # One-shot job: wait for dependencies, train, then publish the model and run data.
   train-model:
     build:
       context: .
@@ -73,6 +77,7 @@ services:
       - mlflow_data:/mlruns
     command: ["python", "-m", "fashion_mnist_mlop.train", "--config", "/workspace/configs/training.toml"]
 
+  # Loads the newest model from MinIO after the training job completes successfully.
   api:
     build:
       context: .
@@ -96,6 +101,7 @@ services:
       - "127.0.0.1:8000:8000"
     command: uvicorn fashion_mnist_mlop.api:app --host 0.0.0.0 --port 8000
 
+  # UI forwards uploaded images to the API; inference stays in the backend.
   streamlit:
     build:
       context: .
@@ -110,5 +116,6 @@ services:
     command: streamlit run app/streamlit/app.py --server.address 0.0.0.0 --server.port 8501
 
 volumes:
+  # Keep object storage and experiment history across container restarts.
   minio_storage:
   mlflow_data:

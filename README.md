@@ -1,31 +1,30 @@
-# Fashion-MNIST — pipeline MLOps
+# Fashion-MNIST MLOps Pipeline
 
-Application de bout en bout pour entraîner un CNN de type LeNet sur Fashion-MNIST, suivre les expériences dans MLflow, stocker les modèles versionnés dans MinIO et effectuer des prédictions avec FastAPI et Streamlit.
+An end-to-end application for training a LeNet-style CNN on Fashion-MNIST, tracking experiments in MLflow, storing versioned models in MinIO, and serving predictions through FastAPI and Streamlit.
 
-## Architecture et classes
+## Architecture and classes
 
 ```text
-Fashion-MNIST -> entraînement PyTorch -> paramètres, métriques et métadonnées MLflow
+Fashion-MNIST -> PyTorch training -> MLflow parameters, metrics, and metadata
                                   -> fashion-minst-bucket/model/<run-id>/model.pt
-                                  -> webhook après publication du modèle
-Streamlit -> POST /predict -> FastAPI -> modèle téléchargé depuis MinIO
+                                  -> webhook after the model is published
+Streamlit -> POST /predict -> FastAPI -> model downloaded from MinIO
 ```
 
-Le nom du bucket `fashion-minst-bucket` conserve volontairement l’orthographe demandée (`minst`).
-Les dix classes sont celles de Fashion-MNIST : T-shirt/top, Trouser, Pullover, Dress,
-Coat, Sandal, Shirt, Sneaker, Bag et Ankle boot.
+The bucket name `fashion-minst-bucket` intentionally preserves the requested spelling (`minst`).
+The ten classes are T-shirt/top, Trouser, Pullover, Dress, Coat, Sandal, Shirt, Sneaker, Bag, and Ankle boot.
 
-## Prérequis
+## Prerequisites
 
-- Python 3.11 ou ultérieur
-- Docker Desktop avec Docker Compose v2 pour l’environnement complet
-- Accès Internet au premier entraînement pour télécharger le jeu Fashion-MNIST
+- Python 3.11 or later
+- Docker Desktop with Docker Compose v2 for the complete environment
+- Internet access during the first training run to download Fashion-MNIST
 
-Les identifiants `minioadmin` utilisés comme valeurs de repli dans la configuration sont réservés au développement local. Avant de démarrer les services, configurez des identifiants locaux dans `.env`. Ne réutilisez pas ces valeurs en production.
+The `minioadmin` fallback credentials are for local development only. Configure your own local credentials in `.env` before starting the services, and do not reuse these defaults in production.
 
-## Installation locale
+## Local installation
 
-Depuis PowerShell à la racine du dépôt :
+From PowerShell at the repository root:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -34,15 +33,15 @@ py -3.11 -m venv .venv
 Copy-Item .env.example .env
 ```
 
-Si PowerShell bloque `Activate.ps1`, aucune activation n’est requise : utilisez directement `.venv\Scripts\python.exe` et `.venv\Scripts\pytest.exe`.
+If PowerShell blocks `Activate.ps1`, you do not need to activate the environment. Run `.venv\Scripts\python.exe` and `.venv\Scripts\pytest.exe` directly.
 
-Modifiez `.env` avant de démarrer les services. `.env` est ignoré par Git; `.env.example` ne contient que des valeurs d’exemple.
+Update `.env` before starting services. Git ignores `.env`; `.env.example` contains example values only.
 
-## Configuration de l’entraînement
+## Training configuration
 
-Les paramètres par défaut sont définis dans [`configs/training.toml`](configs/training.toml). Chaque valeur peut être remplacée par une variable d’environnement `TRAIN_*` correspondante ou par les options CLI prises en charge.
+Default settings are in [`configs/training.toml`](configs/training.toml). Each setting can be overridden by its corresponding `TRAIN_*` environment variable or a supported command-line option.
 
-| Paramètre TOML | Variable d’environnement | CLI | Valeur par défaut |
+| TOML setting | Environment variable | CLI | Default |
 | --- | --- | --- | --- |
 | `epochs` | `TRAIN_EPOCHS` | `--epochs` | 5 |
 | `batch_size` | `TRAIN_BATCH_SIZE` | `--batch-size` | 64 |
@@ -58,97 +57,85 @@ Les paramètres par défaut sont définis dans [`configs/training.toml`](configs
 | `data_loader_workers` | `TRAIN_DATA_LOADER_WORKERS` | — | 2 |
 | `pin_memory` | `TRAIN_PIN_MEMORY` | — | `true` |
 
-Optimiseurs acceptés : `adam`, `sgd`. Fonctions de perte : `cross_entropy`, `nll_loss`.
-Planificateurs : `none`, `step`. La validation rejette les valeurs incompatibles avant
-l’entraînement. Le meilleur état du modèle selon la perte de validation est publié.
+Supported optimizers: `adam`, `sgd`. Supported loss functions: `cross_entropy`, `nll_loss`. Supported schedulers: `none`, `step`. Invalid values are rejected before training starts. The checkpoint with the best validation loss is published.
 
-Exemples :
+Examples:
 
 ```powershell
 .\.venv\Scripts\python.exe -m fashion_mnist_mlop.train --config configs/training.toml
 .\.venv\Scripts\python.exe -m fashion_mnist_mlop.train --epochs 8 --batch-size 128 --learning-rate 0.0005 --optimizer adam --loss cross_entropy --seed 42 --validation-split 0.2
 ```
 
-Le pipeline enregistre la configuration d’entraînement effective, les pertes train/validation à chaque époque, les précisions de validation, la meilleure époque, et une référence vers le modèle MinIO dans MLflow. Les identifiants et URL sensibles ne sont pas inclus dans les artefacts de configuration MLflow.
+Each run logs its effective configuration, per-epoch training and validation losses, validation accuracy, best epoch, and a reference to the MinIO model in MLflow. Sensitive credentials and URLs are excluded from configuration artifacts.
 
-## Démarrage complet avec Docker Compose
+## Start the complete stack with Docker Compose
 
-À la racine du dépôt :
+From the repository root, create the local environment file:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Dans `.env`, remplacez `MINIO_ACCESS_KEY` et `MINIO_SECRET_KEY` par des identifiants locaux personnels. Construisez les images une fois :
+Set your own local values for `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` in `.env`, then build the images once:
 
 ```powershell
 docker compose build
 ```
 
-Puis démarrez MinIO, MLflow et le récepteur webhook :
+Start MinIO, MLflow, and the webhook receiver:
 
 ```powershell
 docker compose up -d minio mlflow webhook-receiver
 docker compose ps
 ```
 
-Lancez l’entraînement comme service Compose ponctuel. Compose attend que MinIO, MLflow et le récepteur webhook soient prêts. Le conteneur terminé reste présent afin que Compose puisse vérifier sa réussite avant de démarrer l’API :
+Run training as a one-shot Compose service. Compose waits for MinIO, MLflow, and the webhook receiver to become healthy:
 
 ```powershell
 docker compose up train-model
 ```
 
-À la fin, le terminal affiche l’identifiant MLflow, la précision de validation et la clé objet publiée. Démarrez ensuite l’API et Streamlit sans reconstruire ni relancer l’entraînement :
+When training completes, the terminal displays the MLflow run ID, validation accuracy, and published object key. Then start the API and Streamlit without rebuilding the images or rerunning training:
 
 ```powershell
 docker compose up -d api streamlit
 docker compose ps
 ```
 
-Les images d’application installent les distributions CPU de PyTorch et TorchVision afin d’éviter d’inclure les bibliothèques CUDA dans les conteneurs.
+The application images install CPU-only PyTorch and TorchVision distributions to avoid including CUDA libraries in the containers.
 
-Adresses locales :
+Local service URLs:
 
-| Service | Adresse |
+| Service | URL |
 | --- | --- |
 | Streamlit | <http://127.0.0.1:8501> |
-| API FastAPI | <http://127.0.0.1:8000> |
-| Documentation OpenAPI | <http://127.0.0.1:8000/docs> |
+| FastAPI | <http://127.0.0.1:8000> |
+| OpenAPI documentation | <http://127.0.0.1:8000/docs> |
 | MLflow | <http://127.0.0.1:5000> |
-| Console MinIO | <http://127.0.0.1:9001> |
-| Récepteur webhook | <http://127.0.0.1:8001/health> |
+| MinIO console | <http://127.0.0.1:9001> |
+| Webhook receiver | <http://127.0.0.1:8001/health> |
 
-Les ports publiés par Compose sont limités à la machine locale. Le service MinIO utilise l’image Bitnami archivée disponible pour l’environnement de développement; elle n’est plus maintenue. Pour une utilisation durable ou en production, choisissez une distribution MinIO prise en charge et configurez les identifiants, TLS, stockage et accès réseau selon votre environnement.
+Compose binds published ports to the local machine only. The development setup uses an archived Bitnami MinIO image that is no longer maintained. For long-term or production use, choose a supported MinIO distribution and configure credentials, TLS, storage, and network access for your environment.
 
-Les données MinIO et MLflow sont persistées dans les volumes Compose `minio_storage` et `mlflow_data`. Le service d’entraînement doit réussir avant le démarrage de l’API; Streamlit appelle l’API sur le réseau Compose. Pour afficher les journaux : `docker compose logs -f train-model api streamlit`.
+MinIO and MLflow data persist in the Compose volumes `minio_storage` and `mlflow_data`. The API starts only after the training service succeeds; Streamlit calls the API over the Compose network. View service logs with `docker compose logs -f train-model api streamlit`.
 
 ## MLflow
 
-L’interface MLflow est disponible à <http://127.0.0.1:5000>. Ouvrez l’expérience `fashion-mnist-classifier` pour consulter les paramètres, les pertes par époque, la précision de validation, `training_config.json` et les métadonnées pointant vers le modèle MinIO.
+Open the MLflow UI at <http://127.0.0.1:5000> and select the `fashion-mnist-classifier` experiment to view parameters, per-epoch losses, validation accuracy, `training_config.json`, and metadata pointing to the MinIO model.
 
-Le backend MLflow et ses artefacts sont stockés dans le volume persistant `mlflow_data`.
+The MLflow backend and artifacts are stored in the persistent `mlflow_data` volume.
 
-## MinIO et sélection du modèle
+## MinIO and model selection
 
-Les variables principales sont `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`,
-`MINIO_SECURE`, `MODEL_BUCKET_NAME` et `MODEL_PREFIX`. Par défaut, le bucket est
-`fashion-minst-bucket` et le préfixe `model/`. Le bucket est créé au téléversement s’il
-n’existe pas. Chaque entraînement publie le meilleur état validé sous
-`model/<run-id>/model.pt`, sans remplacer les versions précédentes.
+Main settings are `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_SECURE`, `MODEL_BUCKET_NAME`, and `MODEL_PREFIX`. The default bucket is `fashion-minst-bucket` and the default prefix is `model/`. The bucket is created on upload if it does not exist. Each training run publishes its best validation checkpoint to `model/<run-id>/model.pt`, keeping previous versions intact.
 
-Au démarrage, l’API charge `MODEL_OBJECT_KEY` si cette variable est définie; sinon, elle
-sélectionne l’objet MinIO le plus récent sous `MODEL_PREFIX`. `MODEL_PATH` peut être défini
-pour un test local uniquement et prend priorité sur MinIO.
+At startup, the API loads `MODEL_OBJECT_KEY` if it is set; otherwise, it selects the newest MinIO object under `MODEL_PREFIX`. For local testing, `MODEL_PATH` can be set and takes precedence over MinIO.
 
-## Webhook de fin d’entraînement
+## Training-complete webhook
 
-Le webhook n’est envoyé qu’après la fin de l’entraînement, la journalisation MLflow et le
-téléversement réussi du modèle. Son URL et son activation sont réglables avec
-`WEBHOOK_URL` et `WEBHOOK_ENABLED`. Le récepteur Compose écoute sur
-`http://127.0.0.1:8001/webhook`; consultez ses journaux avec
-`docker compose logs webhook-receiver`.
+The webhook is sent only after training finishes, MLflow logging succeeds, and the model has been uploaded successfully. Configure its URL and enablement with `WEBHOOK_URL` and `WEBHOOK_ENABLED`. The Compose receiver listens at `http://127.0.0.1:8001/webhook`; inspect its logs with `docker compose logs webhook-receiver`.
 
-Exemple de payload :
+Example payload:
 
 ```json
 {
@@ -161,44 +148,35 @@ Exemple de payload :
 }
 ```
 
-## API et interface
+## API and user interface
 
-- `GET /health` indique si l’API a pu charger un modèle.
-- `POST /predict` accepte un unique fichier image multipart dans le champ `file`; la réponse inclut la classe, la confiance et les probabilités par classe.
+- `GET /health` reports whether the API loaded a model.
+- `POST /predict` accepts a single multipart image in the `file` field. The response includes the predicted class, confidence, and probabilities for each class.
 
-Exemple PowerShell :
+PowerShell example:
 
 ```powershell
 curl.exe -F "file=@tests\fashion_mnist_samples\6_shirt_01.png;type=image/png" http://127.0.0.1:8000/predict
 ```
 
-L’API valide les fichiers vides, le type MIME et le contenu image. Si MinIO ou le modèle
-est indisponible, `/health` renvoie un état dégradé et `/predict` explique que le modèle
-n’est pas chargé. Streamlit affiche l’image, transmet ses octets à FastAPI et présente
-la classe prédite avec son niveau de confiance; il ne fait pas d’inférence localement.
+The API validates empty files, MIME types, and image contents. If MinIO or the model is unavailable, `/health` reports a degraded status and `/predict` explains that the model is not loaded. Streamlit previews the image, sends its bytes to FastAPI, and displays the predicted class and confidence; it does not run inference itself.
 
-Les exemples 28 × 28 en niveaux de gris dans [`tests/fashion_mnist_samples/`](tests/fashion_mnist_samples/)
-proviennent du jeu de test officiel. Ils sont documentés dans le README de ce dossier.
-Le classifieur est destiné aux images au style Fashion-MNIST, et non aux photographies
-de vêtements en conditions réelles.
+The 28 × 28 grayscale examples in [`tests/fashion_mnist_samples/`](tests/fashion_mnist_samples/) come from the official test split and are described in that directory's README. This classifier is intended for Fashion-MNIST-style images, not real-world clothing photographs.
 
-## Tests et validation locale
+## Tests and local validation
 
 ```powershell
 .\.venv\Scripts\pytest.exe tests -q
 ```
 
-Les tests couvrent le chargement et la validation de configuration, le prétraitement
-28 × 28, les entrées invalides de l’API et le chargement des poids locaux pour les
-tests automatisés.
+Tests cover configuration loading and validation, 28 × 28 preprocessing, invalid API inputs, and local model loading for automated tests.
 
-## Nettoyage des services
+## Stop the services
 
-Arrêter les conteneurs sans supprimer les données persistées :
+Stop the containers without deleting persisted data:
 
 ```powershell
 docker compose down
 ```
 
-Ne supprimez les volumes persistants (`docker compose down -v`) que si vous souhaitez
-effacer les modèles MinIO, les expériences MLflow et les autres données associées.
+Only remove persistent volumes with `docker compose down -v` if you intend to delete the MinIO models, MLflow experiments, and associated data.

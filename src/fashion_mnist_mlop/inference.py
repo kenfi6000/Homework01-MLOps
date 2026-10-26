@@ -1,3 +1,5 @@
+"""Load a selected model and run Fashion-MNIST image predictions."""
+
 from __future__ import annotations
 
 import io
@@ -12,12 +14,15 @@ from fashion_mnist_mlop.model import LeNetFashionMNIST
 
 
 class InferenceModel:
+    """Manage model loading and prediction for the API process."""
+
     def __init__(self) -> None:
         self.model = None
         self.model_key = None
         self.store = MinioArtifactStore.from_env()
 
     def load_model(self) -> str:
+        """Load a local override or the selected/latest version from MinIO."""
         local_model_path = os.getenv("MODEL_PATH")
         if local_model_path:
             path = Path(local_model_path)
@@ -34,6 +39,7 @@ class InferenceModel:
         if requested_key:
             candidate = requested_key
         else:
+            # Choosing the latest version makes newly published runs available on restart.
             candidate = self.store.latest_object_key(prefix=os.getenv("MODEL_PREFIX", "model/"))
 
         if not candidate:
@@ -48,6 +54,7 @@ class InferenceModel:
         return candidate
 
     def predict_image_bytes(self, file_bytes: bytes) -> dict[str, object]:
+        """Preprocess image bytes and return the predicted label and probabilities."""
         image_tensor = preprocess_image_for_prediction(file_bytes)
         if self.model is None:
             raise RuntimeError("The model has not been loaded yet.")
@@ -66,4 +73,5 @@ class InferenceModel:
 
 
 def create_inference_model() -> InferenceModel:
+    """Create the inference runtime used by the API application."""
     return InferenceModel()

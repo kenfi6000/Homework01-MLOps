@@ -1,3 +1,5 @@
+"""Train, track, and publish versioned Fashion-MNIST classifier models."""
+
 from __future__ import annotations
 
 import argparse
@@ -31,6 +33,7 @@ from fashion_mnist_mlop.model import build_model
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line overrides for the selected TOML configuration."""
     parser = argparse.ArgumentParser(description="Train a Fashion-MNIST classifier and publish it to MinIO.")
     parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH), help="Path to TOML configuration file")
     parser.add_argument("--epochs", type=int, help="Override the configured number of epochs")
@@ -44,6 +47,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def _set_seed(seed: int) -> None:
+    """Seed Python, NumPy, and PyTorch to make data selection and training repeatable."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -52,6 +56,7 @@ def _set_seed(seed: int) -> None:
 
 
 def _create_optimizer(model: nn.Module, training_config: dict, optimizer_name: str) -> torch.optim.Optimizer:
+    """Construct one of the supported optimizers from the effective settings."""
     if optimizer_name.lower() == "sgd":
         return SGD(model.parameters(), lr=training_config["learning_rate"], momentum=training_config["momentum"], weight_decay=training_config["weight_decay"])
     if optimizer_name.lower() == "adam":
@@ -60,6 +65,7 @@ def _create_optimizer(model: nn.Module, training_config: dict, optimizer_name: s
 
 
 def _calculate_loss(logits: torch.Tensor, targets: torch.Tensor, loss_function: str) -> torch.Tensor:
+    """Apply the selected loss to model logits and integer class targets."""
     if loss_function.lower() == "cross_entropy":
         return F.cross_entropy(logits, targets)
     if loss_function.lower() == "nll_loss":
@@ -68,6 +74,7 @@ def _calculate_loss(logits: torch.Tensor, targets: torch.Tensor, loss_function: 
 
 
 def _safe_config_snapshot(config) -> dict:
+    """Build a reproducibility snapshot that deliberately omits credentials."""
     return {
         "training": config.training.to_dict(),
         "mlflow": {
@@ -88,6 +95,7 @@ def _safe_config_snapshot(config) -> dict:
 
 
 def _send_webhook_if_needed(url: str, payload: dict) -> None:
+    """Send the completion event and raise if the receiver does not accept it."""
     if not url:
         return
     response = requests.post(url, json=payload, timeout=30)
@@ -95,6 +103,7 @@ def _send_webhook_if_needed(url: str, payload: dict) -> None:
 
 
 def train_and_publish(config_path: str | None = None, args: argparse.Namespace | None = None) -> str:
+    """Train, log, and upload the best validation checkpoint before notifying."""
     config = load_config(config_path)
     args = args or argparse.Namespace(
         epochs=None,
@@ -180,6 +189,7 @@ def train_and_publish(config_path: str | None = None, args: argparse.Namespace |
             mlflow.log_metric("validation_accuracy", validation_accuracy, step=epoch)
 
             if validation_loss < best_validation_loss:
+                # Keep the best validation checkpoint, not simply the final epoch.
                 best_validation_loss = validation_loss
                 best_validation_accuracy = validation_accuracy
                 best_epoch = epoch
@@ -197,6 +207,7 @@ def train_and_publish(config_path: str | None = None, args: argparse.Namespace |
             raise RuntimeError("Training did not produce a model checkpoint.")
 
         model.load_state_dict(best_state)
+        # The run ID creates a unique MinIO key so later runs cannot overwrite this model.
         model_prefix = config.minio.model_prefix.strip("/")
         object_key = f"{model_prefix}/{mlflow_run.info.run_id}/model.pt" if model_prefix else f"{mlflow_run.info.run_id}/model.pt"
         model_buffer = BytesIO()
@@ -228,6 +239,7 @@ def train_and_publish(config_path: str | None = None, args: argparse.Namespace |
         run_id = mlflow_run.info.run_id
 
     if config.webhook.enabled and config.webhook.url:
+        # Reaching this point means training, MLflow logging, and the MinIO upload succeeded.
         payload = {
             "status": "success",
             "run_id": run_id,
@@ -247,6 +259,7 @@ def train_and_publish(config_path: str | None = None, args: argparse.Namespace |
 
 
 def main() -> None:
+    """Resolve the config path and run training with command-line overrides."""
     config_path = os.getenv("TRAIN_CONFIG_PATH")
     args = _parse_args()
     train_and_publish(config_path or args.config, args)

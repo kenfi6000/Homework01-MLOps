@@ -1,3 +1,5 @@
+"""Load and validate runtime settings from TOML files and environment variables."""
+
 from __future__ import annotations
 
 import os
@@ -16,6 +18,7 @@ DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "trainin
 
 
 def _read_toml(path: str | Path | None) -> dict[str, Any]:
+    """Read the requested TOML file, or return defaults when no default file exists."""
     resolved = Path(path) if path is not None else DEFAULT_CONFIG_PATH
     if not resolved.exists():
         if path is not None:
@@ -26,6 +29,7 @@ def _read_toml(path: str | Path | None) -> dict[str, Any]:
 
 
 def _read_env(key: str, default: Any, cast: Any | None = None) -> Any:
+    """Return an environment override converted to the requested type."""
     value = os.environ.get(key, default)
     if cast is None:
         return value
@@ -111,6 +115,7 @@ class RuntimeConfig:
 
 
 def _load_training_settings(raw: dict[str, Any]) -> TrainingSettings:
+    """Resolve training options with environment values taking precedence over TOML."""
     section = raw.get("training", {})
     return TrainingSettings(
         epochs=_read_env("TRAIN_EPOCHS", section.get("epochs", 5), int),
@@ -134,6 +139,7 @@ def _load_training_settings(raw: dict[str, Any]) -> TrainingSettings:
 
 
 def _load_mlflow_settings(raw: dict[str, Any]) -> MLflowSettings:
+    """Resolve MLflow connection settings from the environment or TOML."""
     section = raw.get("mlflow", {})
     return MLflowSettings(
         tracking_uri=_read_env("MLFLOW_TRACKING_URI", section.get("tracking_uri", "http://mlflow:5000"), str),
@@ -142,6 +148,7 @@ def _load_mlflow_settings(raw: dict[str, Any]) -> MLflowSettings:
 
 
 def _load_minio_settings(raw: dict[str, Any]) -> MinioSettings:
+    """Resolve MinIO settings without including credentials in serialized config."""
     section = raw.get("minio", {})
     return MinioSettings(
         endpoint=_read_env("MINIO_ENDPOINT", section.get("endpoint", "minio:9000"), str),
@@ -154,6 +161,7 @@ def _load_minio_settings(raw: dict[str, Any]) -> MinioSettings:
 
 
 def _load_webhook_settings(raw: dict[str, Any]) -> WebhookSettings:
+    """Resolve webhook settings from the environment or TOML."""
     section = raw.get("webhook", {})
     return WebhookSettings(
         url=_read_env("WEBHOOK_URL", section.get("url", "http://webhook-receiver:8001/webhook"), str),
@@ -162,6 +170,7 @@ def _load_webhook_settings(raw: dict[str, Any]) -> WebhookSettings:
 
 
 def _as_bool(value: str | bool) -> bool:
+    """Parse common human-readable boolean values and reject ambiguous strings."""
     if isinstance(value, bool):
         return value
     normalized = str(value).strip().lower()
@@ -173,6 +182,7 @@ def _as_bool(value: str | bool) -> bool:
 
 
 def load_config(config_path: str | Path | None = None) -> RuntimeConfig:
+    """Load every settings group and validate training options before use."""
     raw = _read_toml(config_path or DEFAULT_CONFIG_PATH)
     training = _load_training_settings(raw)
     validate_training_settings(training)
@@ -183,6 +193,7 @@ def load_config(config_path: str | Path | None = None) -> RuntimeConfig:
 
 
 def validate_training_settings(settings: TrainingSettings) -> None:
+    """Reject unsupported or unsafe training values before starting a run."""
     if settings.epochs < 1:
         raise ValueError("Training epochs must be at least 1.")
     if settings.batch_size < 1:
