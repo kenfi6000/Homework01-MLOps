@@ -1,3 +1,5 @@
+"""FastAPI application exposing model health and image prediction endpoints."""
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -11,6 +13,7 @@ inference_runtime = create_inference_model()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Load the model at startup and preserve failures for degraded health reporting."""
     try:
         inference_runtime.load_model()
         app.state.model_error = None
@@ -24,6 +27,7 @@ app = FastAPI(title="Fashion-MNIST Inference API", version="0.1.0", lifespan=lif
 
 @app.get("/health")
 async def health() -> dict[str, object]:
+    """Report whether a model is available to serve predictions."""
     if inference_runtime.model is None:
         return {
             "status": "degraded",
@@ -35,6 +39,7 @@ async def health() -> dict[str, object]:
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)) -> dict[str, object]:  # noqa: B008
+    """Validate one uploaded image and return the model's prediction."""
     if file is None or file.filename is None:
         raise HTTPException(status_code=400, detail="An image file is required.")
 

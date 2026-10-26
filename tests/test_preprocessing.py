@@ -1,3 +1,5 @@
+"""Tests for the Fashion-MNIST image preprocessing contract."""
+
 from __future__ import annotations
 
 from io import BytesIO

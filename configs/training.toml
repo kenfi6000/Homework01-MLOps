@@ -1,4 +1,5 @@
 [training]
+# Core optimization settings; environment variables and CLI options can override these.
 epochs = 5
 batch_size = 64
 learning_rate = 0.001
@@ -10,19 +11,24 @@ momentum = 0.9
 weight_decay = 0.0001
 learning_rate_schedule = "none"
 early_stopping_patience = 5
+# Use zero workers for easier debugging on constrained/local environments.
 data_loader_workers = 2
 pin_memory = true
 
 [mlflow]
+# The Compose service name is resolved on the internal Docker network.
 tracking_uri = "http://mlflow:5000"
 experiment_name = "fashion-mnist-classifier"
 
 [minio]
 endpoint = "minio:9000"
 secure = false
+# Keep the assignment's requested spelling: "minst" is intentional.
 bucket_name = "fashion-minst-bucket"
+# Each run ID is appended to this prefix to preserve model versions.
 model_prefix = "model/"
 
 [webhook]
+# The receiver is notified only after the model upload and MLflow logging succeed.
 url = "http://webhook-receiver:8001/webhook"
 enabled = true

@@ -1,3 +1,5 @@
+"""Tests for API health and validation of uploaded image requests."""
+
 from __future__ import annotations
 
 from fastapi.testclient import TestClient

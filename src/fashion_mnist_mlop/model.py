@@ -1,9 +1,13 @@
+"""LeNet-style convolutional network for 28x28 grayscale Fashion-MNIST images."""
+
 from __future__ import annotations
 
 from torch import nn
 
 
 class LeNetFashionMNIST(nn.Module):
+    """Extract image features with convolutions and classify them into ten classes."""
+
     def __init__(self, num_classes: int = 10) -> None:
         super().__init__()
         self.feature_extractor = nn.Sequential(
@@ -24,9 +28,11 @@ class LeNetFashionMNIST(nn.Module):
         )
 
     def forward(self, inputs):
+        """Return class logits for a batch of normalized grayscale images."""
         features = self.feature_extractor(inputs)
         return self.classifier(features)
 
 
 def build_model() -> LeNetFashionMNIST:
+    """Construct the default Fashion-MNIST classifier."""
     return LeNetFashionMNIST()

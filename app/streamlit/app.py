@@ -1,3 +1,5 @@
+"""Streamlit presentation layer that delegates predictions to the FastAPI service."""
+
 from __future__ import annotations
 
 import os
@@ -12,6 +14,7 @@ API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 
 def show_health_status() -> None:
+    """Display API availability without blocking the image upload workflow."""
     try:
         response = requests.get(f"{API_URL.rstrip('/')}/health", timeout=10)
         if response.ok:
@@ -34,6 +37,7 @@ if uploaded_file is not None:
     st.image(image, caption="Uploaded image", use_container_width=True)
 
     if st.button("Predict"):
+        # getvalue() can be called after the preview has consumed the upload stream.
         file_data = uploaded_file.getvalue()
         try:
             response = requests.post(

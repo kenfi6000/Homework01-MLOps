@@ -2,15 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /workspace
 
+# Include project metadata and source so the package can be installed in editable mode.
 COPY pyproject.toml ./
 COPY README.md ./
 COPY src ./src
 COPY app ./app
 
+# Use CPU-only PyTorch/TorchVision wheels for a smaller inference image.
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu "torch>=2.2.0" "torchvision>=0.17.0" && \
     pip install --no-cache-dir -e .
 
+# Make the src-layout package importable by Uvicorn.
 ENV PYTHONPATH=/workspace/src
 
 CMD ["uvicorn", "fashion_mnist_mlop.api:app", "--host", "0.0.0.0", "--port", "8000"]
